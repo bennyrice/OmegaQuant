@@ -1,0 +1,296 @@
+---
+title: "2019 OmegaQuant Plot v1.3"
+author: "Benny Rice"
+date: "03/26/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+#### Notes
+
+- Data types to visualize and/or analyze in this file:
+
+1. OmegaQuant fatty acid results (using a sample of data from the CRS2017 project and the Kiribati 2020 project)
+
+***
+#### Defining thresholds
+
+- See **[GitHub](https://github.com/bennyrice/OmegaQuant)** for associated documentation on cut-offs (i.e., Harris et al 2017)
+
+##### Omega-3 index
+
+```{r t1, eval = FALSE}
+# Omega-3 index values >  6.1%            = no increased cardiovascular health risk
+# Omega-3 index values <= 6.1% and > 4.0% = increased cardiovascular health risk
+# Omega-3 index values <= 4.0%            = greatly increased cardiovascular health risk
+```
+
+##### Trans fat index
+
+**Note:** Trans fat index seems to be missing from the Kiribati data
+
+```{r t2, eval = FALSE}
+# Trans fat index values <  1.00%             = no increased cardiovascular health risk
+# Trans fat index values >= 1.00% and < 1.75% = intermediate cardiovascular health risk
+# Trans fat index values >= 1.75%             = increased cardiovascular health risk
+```
+***
+
+Set up: Defining main working directory
+```{r i1, echo = FALSE, message = FALSE}
+mainDir <- '/Users/blrice/Dropbox/Lab Projects/CRS - Data Cleaning/WORK/C 2019 Preliminary Analysis Work/20190128 OmegaQuant/20200729 Adjusting code for Kiribati Data/'
+```
+
+Set up: Loading packages (*not all may be necessary)
+```{r i2, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggthemes)
+library(reshape2)
+library(ggpubr)
+library(waffle)
+```
+
+Set up: Reading in CSVs
+
+- Excel sheets `MAHERY Results 01252019.xlsx` and `OmegaQuant Results - Harvard - Golden - P378-US1 - DBS - 16Jul2020.xlsx` manually saved as CSV files
+- Subsequent analysis may need to link to age and sex data (not done here)
+
+```{r i3, echo = FALSE, message = FALSE}
+filename_df.CRS <- "MAHERY Results 01252019.csv"
+#Skip 11 lines at the top of the CSV
+df.CRS <- read.csv(file.path(mainDir, filename_df.CRS), skip = 11, stringsAsFactors = FALSE)
+#Delete junk rows
+df.CRS <- df.CRS %>% filter(!is.na(calculated_age)) %>% 
+  #Keep ID, region, village, Omega 3 and trans fat columns
+  select(OmQ_filter_paper_id, region_name, village_name, Omega.3.Index, Trans.Fat.Index) %>%
+  #Remove % sign from columns, convert to numeric
+  mutate(Omega.3.Index   = as.numeric(gsub("%", "", Omega.3.Index))) %>%
+  mutate(Trans.Fat.Index = as.numeric(gsub("%", "", Trans.Fat.Index)))
+
+filename_df.KIRI <- "OmegaQuant Results - Harvard - Golden - P378-US1 - DBS - 16Jul2020.csv"
+#Skip 15 lines at the top of the CSV
+df.KIRI <- read.csv(file.path(mainDir, filename_df.KIRI), skip = 15, stringsAsFactors = FALSE)
+#Delete junk rows
+df.KIRI <- df.KIRI %>% filter(Omega.3.Index != "") %>% 
+  #Keep ID, Date, Location, Omega 3 columns
+  select(Info.on.Collection.Card, Date, Location, Omega.3.Index) %>%
+  #Remove % sign from columns, convert to numeric
+  mutate(Omega.3.Index   = as.numeric(gsub("%", "", Omega.3.Index)))
+```
+
+***
+
+
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+# (1) Fatty Acid Data
+
+</div>
+
+***
+
+***
+
+#### (1.1) Applying Omega 3 thresholds:
+
+***
+
+(1.1.1) Specifying Omega 3 outcomes
+```{r 1.1.1, eval = FALSE}
+# Omega-3 index values >  6.1%            = no increased cardiovascular health risk
+# Omega-3 index values <= 6.1% and > 4.0% = increased cardiovascular health risk
+# Omega-3 index values <= 4.0%            = greatly increased cardiovascular health risk
+
+# (OM3_1) Omega.3.Index >  6.1                       ~ '1_no_increased_risk'
+# (OM3_2) Omega.3.Index <= 6.1 & Omega.3.Index > 4.0 ~ '2_increased_risk'
+# (OM3_3) Omega.3.Index <= 4.0                       ~ '3_greatly_increased_risk'
+```
+
+(1.1.2) Filtering Omega 3 data per thresholds
+```{r 1.1.2A, echo = FALSE}
+df.CRS <- df.CRS %>% mutate(OM3_outcome_cat = case_when(
+  Omega.3.Index >  6.1                       ~ '1_no_increased_risk',
+  Omega.3.Index <= 6.1 & Omega.3.Index > 4.0 ~ '2_increased_risk',
+  Omega.3.Index <= 4.0                       ~ '3_greatly_increased_risk'))
+df.KIRI <- df.KIRI %>% mutate(OM3_outcome_cat = case_when(
+  Omega.3.Index >  6.1                       ~ '1_no_increased_risk',
+  Omega.3.Index <= 6.1 & Omega.3.Index > 4.0 ~ '2_increased_risk',
+  Omega.3.Index <= 4.0                       ~ '3_greatly_increased_risk'))
+```
+
+Preview of cleaned and filtered Omega 3 data:
+```{r 1.1.2B, echo = FALSE}
+kable(df.CRS[1:100, ],  caption = "CRS: Preview of cleaned and filtered Omega 3 data")  %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 11) %>% scroll_box(width = "100%", height = "300px")
+
+kable(df.KIRI[1:100, ], caption = "KIRI: Preview of cleaned and filtered Omega 3 data") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 11) %>% scroll_box(width = "100%", height = "300px")
+```
+
+- (even here you can already see a difference between Madagascar and Kiribati)
+
+***
+***
+
+#### (2.1) Applying Trans fat thresholds:
+
+- (**NOTE:** No trans data available for Kiribati in the date file)
+
+***
+
+(2.1.1) Specifying Trans fat outcomes
+```{r 2.1.1, eval = FALSE}
+# Trans fat index values <  1.00%             = no increased cardiovascular health risk
+# Trans fat index values >= 1.00% and < 1.75% = intermediate cardiovascular health risk
+# Trans fat index values >= 1.75%             = increased cardiovascular health risk
+
+# (TFAT_1) Trans.Fat.Index <  1.00                          ~ '1_no_increased_risk'
+# (TFAT_2) Trans.Fat.Index >= 1.00 & Trans.Fat.Index < 1.75 ~ '2_increased_risk'
+# (TFAT_3) Trans.Fat.Index >= 1.75                          ~ '3_greatly_increased_risk'
+```
+
+(2.1.2) Filtering Trans fat data per thresholds
+```{r 2.1.2A, echo = FALSE}
+df.CRS <- df.CRS %>% mutate(TFAT_outcome_cat = case_when(
+  Trans.Fat.Index <  1.00                          ~ '1_no_increased_risk',
+  Trans.Fat.Index >= 1.00 & Trans.Fat.Index < 1.75 ~ '2_increased_risk',
+  Trans.Fat.Index >= 1.75                          ~ '3_greatly_increased_risk'))
+```
+
+Preview of cleaned and filtered Trans fat data:
+```{r 2.1.2B, echo = FALSE}
+kable(df.CRS[1:100, ],  caption = "CRS: Preview of cleaned and filtered Trans fat data")  %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 11) %>% scroll_box(width = "100%", height = "300px")
+```
+
+***
+
+#### (2.3) Visualizing Omega 3 and Trans fat data
+
+***
+
+(2.3.1) MADAGASCAR (CRS): Proportions of the sample population with a given Omega 3 level
+```{r 2.3.1, echo = FALSE, fig.height = 7}
+df.CRS %>% group_by(OM3_outcome_cat) %>% summarize(n = length(Omega.3.Index), .groups = 'drop') %>% ungroup() %>%
+  ggplot(aes(fill = OM3_outcome_cat, values = n)) +
+  geom_waffle(color = "white", size = .25, n_rows = 20, flip = TRUE) +
+  scale_x_discrete() + 
+  scale_y_continuous(labels = function(x) x * 20, # make this multiplyer the same as n_rows
+                     expand = c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    title = "Omega 3 Status",
+    subtitle = "(CRS2017 Madagascar)",
+    x = "Risk category",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), axis.ticks.y = element_line()) +
+  guides(fill = guide_legend(reverse = TRUE))
+```
+
+***
+
+***
+
+(2.3.2) KIRIBATI: Proportions of the sample population with a given Omega 3 level
+```{r 2.3.2, echo = FALSE, fig.height = 7}
+df.KIRI %>% group_by(OM3_outcome_cat) %>% summarize(n = length(Omega.3.Index), .groups = 'drop') %>% ungroup() %>%
+  ggplot(aes(fill = OM3_outcome_cat, values = n)) +
+  geom_waffle(color = "white", size = .25, n_rows = 20, flip = TRUE) +
+  scale_x_discrete() + 
+  scale_y_continuous(labels = function(x) x * 20, # make this multiplyer the same as n_rows
+                     expand = c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    title = "Omega 3 Status",
+    subtitle = "(Kiribati)",
+    x = "Risk category",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), axis.ticks.y = element_line()) +
+  guides(fill = guide_legend(reverse = TRUE))
+```
+
+***
+
+***
+
+(2.3.3) MADAGASCAR (CRS): Proportions of the sample population with a given Trans fat level
+```{r 2.3.3, echo = FALSE, fig.height = 7}
+df.CRS %>% group_by(TFAT_outcome_cat) %>% summarize(n = length(Trans.Fat.Index), .groups = 'drop') %>% ungroup() %>%
+  ggplot(aes(fill = TFAT_outcome_cat, values = n)) +
+  geom_waffle(color = "white", size = .25, n_rows = 20, flip = TRUE) +
+  scale_x_discrete() + 
+  scale_y_continuous(labels = function(x) x * 20, # make this multiplyer the same as n_rows
+                     expand = c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    title = "Trans Fat Status",
+    subtitle = "(CRS2017 Madagascar)",
+    x = "Risk category",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), axis.ticks.y = element_line()) +
+  guides(fill = guide_legend(reverse = TRUE))
+```
+
+***
+
+***
+
+(2.3.4) **MADAGASCAR (CRS2017)**: Scatter plot of Omega 3 Levels
+```{r 2.3.4, echo = FALSE, fig.height = 7}
+df.CRS %>% group_by(village_name) %>% arrange(OmQ_filter_paper_id) %>% 
+  mutate(row_index = 1:length(Omega.3.Index)) %>% ungroup() %>%
+  mutate(OM3_outcome_cat = 
+           factor(OM3_outcome_cat, 
+                  levels = c("1_no_increased_risk", "2_increased_risk", "3_greatly_increased_risk"))) %>%
+  ggplot(aes(x = row_index, y = Omega.3.Index, color = OM3_outcome_cat)) +
+  geom_point() +
+  scale_color_manual(values=c("#4e6cef", "#ffa000", "#dd2c00")) +
+  facet_grid(cols = vars(village_name), scales = "free_x") +
+  theme_clean() + 
+  ylim(0, 17) +
+  theme(legend.position = "top", legend.text = element_text(size = 5),
+        axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank(),
+        strip.text = element_text(size = 5))
+```
+
+(2.3.5) **KIRIBATI**: Scatter plot of Omega 3 Levels
+```{r 2.3.5, echo = FALSE, fig.height = 7}
+df.KIRI %>% mutate(row_index = 1:length(Omega.3.Index)) %>%
+  mutate(OM3_outcome_cat = 
+           factor(OM3_outcome_cat, 
+                  levels = c("1_no_increased_risk", "2_increased_risk", "3_greatly_increased_risk"))) %>%
+  ggplot(aes(x = row_index, y = Omega.3.Index, color = OM3_outcome_cat)) +
+  geom_point() +
+  scale_color_manual(values=c("#4e6cef", "#ffa000", "#dd2c00")) +
+  theme_clean() + 
+  ylim(0, 17) +
+  theme(legend.position = "top", legend.text = element_text(size = 5),
+        axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank())
+
+```
+
+***
+
+
